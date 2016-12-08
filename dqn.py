@@ -9,7 +9,7 @@ class DQN():
         # for all instances. Therefore we must set the default from within, and use a Sentinel value to denote
         # when an input_shape is not passed.
         if input_shape is None:
-            input_shape = [None, 5, 5, 1]
+            input_shape = [None, 25]
 
         self.s = sess if sess is not None else tf.Session()
 
