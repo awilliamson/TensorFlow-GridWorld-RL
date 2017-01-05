@@ -1,8 +1,52 @@
 import tensorflow as tf
-import tflearn
+#import tflearn
 from collections import deque
 
 class DQN():
+    def create_model(self, keep_prob=0.5):
+
+        q_in = tf.placeholder(tf.float32, [None, 25])
+
+        # Original Q-Network
+        with tf.name_scope("weights_and_biases"):
+            weights = {
+                "fc1": tf.Variable(tf.random_normal([self.input_shape, 512]), name="fc1_w"),
+                "fc2": tf.Variable(tf.random_normal([512, 512]), name="fc2_w"),
+                "fc3": tf.Variable(tf.random_normal([512, 512]), name="fc3_w"),
+                "out": tf.Variable(tf.random_normal([512, self.num_outputs]), name="out_w")
+            }
+            bias = {
+                "fc1": tf.Variable(tf.random_normal([512]), name="fc1_b"),
+                "fc2": tf.Variable(tf.random_normal([512]), name="fc2_b"),
+                "fc3": tf.Variable(tf.random_normal([512]), name="fc3_b"),
+                "out": tf.Variable(tf.random_normal([self.num_outputs]), name="out_b")
+            }
+
+        # fc1
+        with tf.name_scope("fc1"):
+            q_fc1 = tf.nn.tanh(tf.add(tf.matmul(q_in, weights["fc1"]), bias["fc1"]), name="fc1")
+
+        with tf.name_scope("drop1"):
+            q_fc1_drop = tf.nn.dropout(q_fc1, keep_prob)
+
+        # fc2
+        with tf.name_scope("fc2"):
+            q_fc2 = tf.nn.tanh(tf.add(tf.matmul(q_fc1_drop, weights["fc2"]), bias["fc2"]), name="fc2")
+
+        with tf.name_scope("drop2"):
+            q_fc2_drop = tf.nn.dropout(q_fc2, keep_prob)
+
+        with tf.name_scope("fc3"):
+            q_fc3 = tf.nn.tanh(tf.add(tf.matmul(q_fc2_drop, weights["fc3"]), bias["fc3"]), name="fc3")
+
+        with tf.name_scope("drop3"):
+            q_fc3_drop = tf.nn.dropout(q_fc3, keep_prob)
+
+        with tf.name_scope("out"):
+            q_out = tf.nn.softmax(tf.add(tf.matmul(q_fc3_drop, weights["out"]), bias["out"]), name="out")
+
+        return q_out, q_in, [q_fc1, q_fc1_drop, q_fc2, q_fc2_drop, q_fc3, q_fc3_drop, q_out], [weights, bias]
+
     def __init__(self, sess=None, input_shape=None, num_outputs=4):
 
         # Cannot use mutable type for default, as this does not create a new shape every invocation, but only once
@@ -27,57 +71,67 @@ class DQN():
         # How much to update Target Q weights, based on loss.
         self.target_q_network_update_coefficient = tf.constant( 0.01 )
 
+        self.optimiser = tf.train.AdamOptimizer(learning_rate=0.001)
+
         # Initialise action-value Q function
         with tf.name_scope("q_network"):
-            self.q_network, self.q_network_layers = self.create_model()
+            self.q_out, self.q_in, self.q_network, self.q_network_Wsb = self.create_model()
 
+        # Initialise Target Q Network and variables. Under the hood of 'target_q_network' name.
+        # Eg target_q_network/weights_and_biases/fc1_w
         with tf.name_scope("target_q_network"):
             # Initialise target action-value Q function; Weights will be frozen, and only periodically updated.
-            self.target_q_network, self.target_q_network_layers = self.create_model()
-        # Initialise all tf variables.
-        self.s.run(tf.initialize_all_variables())
+            self.target_q_out, self.target_q_in, self.target_q_network, self.target_q_network_Wsb = self.create_model()
 
-        #model_vars = tflearn.variables.get_all_trainable_variable()
-        #with self.s.as_default():
-        #    for x in model_vars: print(tflearn.variables.get_value( x ))
+        # Qt+1 = Qt + alpha( rt+1 + gamma(Qt(St+1, At) - Qt) )
+        # New value = Old Value + alpha( reward + discount_factor( estimate of future value ) - old value )
+        with tf.name_scope('calculations'):
 
+            with tf.name_scope("taking_action"):
+                self.observation = tf.placeholder(tf.float32, [None, self.input_shape], name="observation")
+                self.action_scores = tf.matmul(self.observation, self.q_network_Wsb[0]["fc1"]) + self.q_network_Wsb[0]["fc1"]
+                tf.summary.histogram("action_scores", self.action_scores)
+                self.predicted_actions = tf.argmax(self.action_scores, dimension=1, name="predicted_actions")
+
+            with tf.name_scope("estimating_future_rewards"):
+                self.next_observation = tf.placeholder(tf.float32, [None, self.input_shape], name="next_observation")
+
+                self.next_action_scores = tf.matmul(self.observation, self.target_q_network_Wsb[0]["fc1"]) + self.target_q_network_Wsb[0]["fc1"]
+                tf.summary.histogram("target_action_scores", self.next_action_scores)
+                self.rewards = tf.placeholder(tf.float32, (None,), name="rewards")
+                target_values = tf.reduce_max(self.next_action_scores, reduction_indices=[1, ])
+
+                # Qt <- Qt + alpha( self.rewards + 0.99 * target_values )
+                self.future_rewards = self.rewards + 0.99 * target_values
+
+            with tf.name_scope("q_value_prediction"):
+                # FOR PREDICTION ERROR
+                self.q_prediction_action_scores = tf.reduce_sum(self.action_scores, reduction_indices=[1, ])
+
+                temp_diff = self.q_prediction_action_scores - self.future_rewards
+                self.prediction_error = tf.reduce_mean(tf.square(temp_diff))
+                tf.summary.scalar('prediction_error', self.prediction_error )
+                self.train_op = self.optimiser.minimize( self.prediction_error )
+
+        # Define OP to Initialise all tf variables.
+        init = tf.global_variables_initializer() # Latest 0.12rc API variant of tf.initialize_all_variables()
+        #self.s.run(tf.initialize_all_variables())
 
         with tf.name_scope("target_network_update"):
             self.target_q_network_update_op = []
-            #For each layer in the architecture ( which has variables )
-            for q, t in zip( self.q_network_layers, self.target_q_network_layers ):
-                # For each of those variables
-                for vq, vt in zip( q, t ):
-                    # Assign an update operation to bring them close together, by subtracting the difference.
-                    self.target_q_network_update_op.append( vt.assign_sub( vt - vq ) )
+
+            #Wsb contains [Weights, Bias] therefore, we need to calculate these differences twice.
+            for i in range( len(self.q_network_Wsb )):
+                for q, t in zip( self.q_network_Wsb[i].values(), self.target_q_network_Wsb[i].values() ):
+
+                    # Obtain variables, eg 'out' for the weights, in zipped format.
+                    # Create a subtraction op equal to the distance.
+                    # q -= t-q (difference).
+                    self.target_q_network_update_op.append(q.assign_sub(t - q))
 
             # Group all the sub-operations, into a big super-operation to be applied.
             self.target_q_network_update_op = tf.group(*self.target_q_network_update_op)
 
         # Update our Target Q Network
-        self.s.run( self.target_q_network_update_op )
-
-        # Testing if our Target Network equals our current ( Was our update successful ).
-        for a, b in zip( self.q_network_layers, self.target_q_network_layers):
-            for x, y in zip( a, b ):
-                assert( tflearn.variables.get_value( x ) == tflearn.variables.get_value( y ) )
-
-
-    def create_model(self):
-            layers_array = []
-
-            input = tflearn.input_data( shape=self.input_shape, name="input")
-            fc1 = tflearn.fully_connected(input, 50, activation='tanh', name='fc1')
-            fc2 = tflearn.fully_connected(fc1, 50, activation='tanh', name='fc2')
-            read_out = tflearn.fully_connected(fc2, self.num_outputs, activation='softmax', name='readout')
-            regression = tflearn.regression(read_out,
-                                     optimizer='adam',
-                                     loss='categorical_crossentropy',
-                                     learning_rate=0.001,
-                                     name='target')
-
-            layers_array.append(tflearn.variables.get_layer_variables_by_name('fc1'))
-            layers_array.append(tflearn.variables.get_layer_variables_by_name('fc2'))
-            layers_array.append(tflearn.variables.get_layer_variables_by_name('readout'))
-
-            return regression, layers_array
+        self.s.run( init )
+        self.s.run( self.target_q_network_update_op ) #Apply immediately!
