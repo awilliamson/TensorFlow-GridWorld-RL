@@ -13,7 +13,8 @@ def serialise_gridworld( gw ):
 
 if __name__ == "__main__":
     gw = GridWorld()
-    dqn = DQN(input_shape=[None, len(serialise_gridworld(gw)) ], num_outputs=4)
+    print( "Serialise", len( serialise_gridworld(gw) ) )
+    dqn = DQN(input_shape=len(serialise_gridworld(gw)), num_outputs=4)
 
     gw = GridWorld(5, 5)
     print(gw)
