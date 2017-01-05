@@ -1,0 +1,45 @@
+import tensorflow as tf
+from collections import deque
+import random
+
+
+class DQN():
+    def __init__(self, sess=None, input_shape=None, num_outputs=4, experience_replay_size=50):
+        # Cannot use mutable type for default, as this does not create a new shape every invocation, but only once
+        # for all instances. Therefore we must set the default from within, and use a Sentinel value to denote
+        # when an input_shape is not passed.
+        if input_shape is None:
+            input_shape = [None, 25]
+
+        self.s = sess if sess is not None else tf.Session()
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+
+        """Placeholder"""
+        self.input_shape = input_shape
+        self.num_outputs = num_outputs
+
+        self.minibatch_size = 32
+
+        self.experience_replay_size = experience_replay_size
+        # Create experience replay to a maximum size N.
+        self.experience_replay = deque(maxlen=self.experience_replay_size)
+
+        # Used for updating target Q Network's Weights.
+        self.target_q_network_update_frequency = 100
+        self.target_q_network_update_count = 0
+
+        # How much to update Target Q weights, based on loss.
+        self.target_q_network_update_coefficient = tf.constant(0.01)
+
+        # Initialise action-value Q function
+        with tf.name_scope("q_network"):
+            self.q_network = self.create_model()
+
+    def create_model(self):
+        # Define layers manually, within self-containing scopes
+
+        self.w = []
+        self.bias = []
+
+        with tf.scope( "fc1" ):
+            self.w["fc1"] = tf.random_normal([ self.input_shape, ])
