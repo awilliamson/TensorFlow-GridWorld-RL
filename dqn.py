@@ -66,7 +66,7 @@ class DQN():
         self.experience_replay = deque(maxlen=self.experience_replay_size)
 
         # Used for updating target Q Network's Weights.
-        self.target_q_network_update_frequency = tf.constant( 100 )
+        self.target_q_network_update_frequency = 100
 
         # How much to update Target Q weights, based on loss.
         self.target_q_network_update_coefficient = tf.constant( 0.01 )
