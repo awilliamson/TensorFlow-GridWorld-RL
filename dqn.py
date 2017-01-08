@@ -112,7 +112,7 @@ class DQN():
                 tf.summary.scalar('prediction_error', self.prediction_error)
                 self.train_op = self.optimiser.minimize( self.prediction_error)
 
-        tf.scalar_summary("prediction_error", self.prediction_error)
+        tf.summary.scalar("prediction_error", self.prediction_error)
 
         # We can use no_op if we're not wanting to generate a summary. Makes logic somewhat easier.
         # Session run( summarize and self.summarize or self.no_op1 ).
