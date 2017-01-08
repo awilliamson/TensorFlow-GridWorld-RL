@@ -88,30 +88,36 @@ class DQN():
         with tf.name_scope('calculations'):
 
             with tf.name_scope("taking_action"):
-                self.observation = tf.placeholder(tf.float32, [None, self.input_shape], name="observation")
-                self.action_scores = tf.matmul(self.observation, self.q_network_Wsb[0]["fc1"]) + self.q_network_Wsb[0]["fc1"]
-                tf.summary.histogram("action_scores", self.action_scores)
-                self.predicted_actions = tf.argmax(self.action_scores, dimension=1, name="predicted_actions")
+                #self.observation = tf.placeholder(tf.float32, [None, self.input_shape], name="observation")
+                tf.summary.histogram("action_scores", self.q_out)
+                self.predicted_actions = tf.argmax(self.q_out, dimension=1, name="predicted_actions")
 
             with tf.name_scope("estimating_future_rewards"):
                 self.next_observation = tf.placeholder(tf.float32, [None, self.input_shape], name="next_observation")
 
-                self.next_action_scores = tf.matmul(self.observation, self.target_q_network_Wsb[0]["fc1"]) + self.target_q_network_Wsb[0]["fc1"]
-                tf.summary.histogram("target_action_scores", self.next_action_scores)
+                #self.next_action_scores = self.target_q_out
+                tf.summary.histogram("target_action_scores", self.target_q_out)
                 self.rewards = tf.placeholder(tf.float32, (None,), name="rewards")
-                target_values = tf.reduce_max(self.next_action_scores, reduction_indices=[1, ])
+                target_values = tf.reduce_max(self.target_q_out, reduction_indices=[1, ])
 
                 # Qt <- Qt + alpha( self.rewards + 0.99 * target_values )
                 self.future_rewards = self.rewards + 0.99 * target_values
 
             with tf.name_scope("q_value_prediction"):
                 # FOR PREDICTION ERROR
-                self.q_prediction_action_scores = tf.reduce_sum(self.action_scores, reduction_indices=[1, ])
+                self.q_prediction_action_scores = tf.reduce_sum(self.q_out, reduction_indices=[1, ])
 
                 temp_diff = self.q_prediction_action_scores - self.future_rewards
                 self.prediction_error = tf.reduce_mean(tf.square(temp_diff))
-                tf.summary.scalar('prediction_error', self.prediction_error )
-                self.train_op = self.optimiser.minimize( self.prediction_error )
+                tf.summary.scalar('prediction_error', self.prediction_error)
+                self.train_op = self.optimiser.minimize( self.prediction_error)
+
+        tf.scalar_summary("prediction_error", self.prediction_error)
+
+        # We can use no_op if we're not wanting to generate a summary. Makes logic somewhat easier.
+        # Session run( summarize and self.summarize or self.no_op1 ).
+        self.summarize = tf.summary.merge_all() # Tensorboard summaries
+        self.no_op1 = tf.no_op()
 
         # Define OP to Initialise all tf variables.
         init = tf.global_variables_initializer() # Latest 0.12rc API variant of tf.initialize_all_variables()
@@ -133,5 +139,5 @@ class DQN():
             self.target_q_network_update_op = tf.group(*self.target_q_network_update_op)
 
         # Update our Target Q Network
-        self.s.run( init )
-        self.s.run( self.target_q_network_update_op ) #Apply immediately!
+        self.s.run(init)
+        self.s.run(self.target_q_network_update_op) #Apply immediately!
