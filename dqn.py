@@ -1,6 +1,8 @@
 import tensorflow as tf
 #import tflearn
 from collections import deque
+import random
+import numpy as np
 
 class DQN():
     def create_model(self, keep_prob=0.5):
@@ -64,6 +66,10 @@ class DQN():
         self.experience_replay_size = 500
         # Create experience replay to a maximum size N.
         self.experience_replay = deque(maxlen=self.experience_replay_size)
+
+        # Counter for training
+        self.training_n = 0
+        self.training_frequency = 50
 
         # Used for updating target Q Network's Weights.
         self.target_q_network_update_frequency = 100
@@ -141,3 +147,43 @@ class DQN():
         # Update our Target Q Network
         self.s.run(init)
         self.s.run(self.target_q_network_update_op) #Apply immediately!
+
+    def add_experience(self, s, a, r, st):
+        # Automatically popleft's when "maxlen=self.experience_replay_size"
+        self.experience_replay.append((s, a, r, st))
+
+    def training(self):
+        if len(self.experience_replay) < self.experience_replay_size:
+            return
+
+        if self.training_n % self.training_frequency == 0:
+            # We can train
+
+            samples = random.sample(range(len(self.experience_replay)), 1)
+            samples = [self.experience_replay[i] for i in samples]
+
+            states_t = np.empty(len(samples))
+            states_t2 = np.empty(len(samples))
+            rewards = np.empty((len(samples),))
+
+            for i, ( s, a, r, st ) in samples:
+                states_t[i] = s
+                rewards[i] = r
+                if st is not None:
+                    states_t2[i] = st
+                else:
+                    states_t2[i] = 0
+
+            summarize = False
+            self.s.run( [self.prediction_error, self.train_op, self.summarize if summarize else self.no_op1],
+                        {self.q_in: states_t,
+                        self.target_q_in: states_t2,
+                        self.rewards: rewards}
+                        )
+
+            if self.training_n % self.target_q_network_update_frequency == 0:
+                self.s.run(self.target_q_network_update_op)
+
+            self.training_n += 1
+
+
