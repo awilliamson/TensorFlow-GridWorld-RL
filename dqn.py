@@ -151,7 +151,9 @@ class DQN():
         self.epsilon_lower_bound = 0.05
         self.epsilon_upper_bound = 1.0
         self.epsilon_actual = self.epsilon_upper_bound
-        self.epsilon_annealing_range = self.experience_replay_size * 3
+        self.epsilon_annealing_range = 750000
+
+        self.actions_n = 0
 
     def epsilon_annealing(self, actions):
         self.epsilon_actual = min(1 - (actions * (self.epsilon_upper_bound - self.epsilon_lower_bound)) / (self.epsilon_annealing_range), 1.0)
@@ -165,7 +167,12 @@ class DQN():
         # Given a state, provide the next action
         # Obtain the highest Q Value action. We have an op called predicted_actions for this.
         # Return the result of self.predicted_actions from the self.s.run return.
-        return self.s.run( [self.predicted_actions], {self.q_in: s})[0]
+        self.actions_n += 1
+        if random.random() < self.epsilon_annealing( self.actions_n ):
+            # Take a random action
+            return random.randint( 0, self.num_outputs - 1)
+        else:
+            return self.s.run( [self.predicted_actions], {self.q_in: s})[0][0]
 
     def training(self):
         if len(self.experience_replay) < self.experience_replay_size:
