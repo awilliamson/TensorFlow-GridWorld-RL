@@ -146,7 +146,16 @@ class DQN():
 
         # Update our Target Q Network
         self.s.run(init)
-        self.s.run(self.target_q_network_update_op) #Apply immediately!
+        self.s.run(self.target_q_network_update_op)  # Apply immediately!
+
+        self.epsilon_lower_bound = 0.05
+        self.epsilon_upper_bound = 1.0
+        self.epsilon_actual = self.epsilon_upper_bound
+        self.epsilon_annealing_range = self.experience_replay_size * 3
+
+    def epsilon_annealing(self, actions):
+        self.epsilon_actual = min(1 - (actions * (self.epsilon_upper_bound - self.epsilon_lower_bound)) / (self.epsilon_annealing_range), 1.0)
+        return self.epsilon_actual
 
     def add_experience(self, s, a, r, st):
         # Automatically popleft's when "maxlen=self.experience_replay_size"
