@@ -152,6 +152,12 @@ class DQN():
         # Automatically popleft's when "maxlen=self.experience_replay_size"
         self.experience_replay.append((s, a, r, st))
 
+    def get_action(self, s):
+        # Given a state, provide the next action
+        # Obtain the highest Q Value action. We have an op called predicted_actions for this.
+        # Return the result of self.predicted_actions from the self.s.run return.
+        return self.s.run( [self.predicted_actions], {self.q_in: s})[0]
+
     def training(self):
         if len(self.experience_replay) < self.experience_replay_size:
             return
