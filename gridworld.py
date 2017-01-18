@@ -33,8 +33,6 @@ class GridWorld:
         self.width = width
         self.height = height
 
-        print(self.width, self.height)
-
         # Create 2D Array, filled with 0's.
         self.map = [[Tile.free for _ in range(self.height)] for _ in range(self.width)]
 
